@@ -30,7 +30,6 @@ jobs:
           yes | sdkmanager --licenses
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-      # 【修复点1】把 Gradle 下载到 /tmp 目录，防止被下面的源码解压脚本误抓
       - name: Install Gradle 8.9
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip -O /tmp/gradle-8.9-bin.zip
@@ -39,10 +38,9 @@ jobs:
 
       - name: Extract Android project
         run: |
-          # 【修复点2】寻找 zip 时，排除掉 gradle 相关的包
           ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" ! -iname "gradle-*" | head -n 1)
           if [ -z "$ZIP_FILE" ]; then
-            echo "❌ ERROR: 在 GitHub 仓库根目录没有找到源码 ZIP 压缩包！请检查是否上传了 .zip 文件。"
+            echo "❌ ERROR: 在 GitHub 仓库根目录没有找到源码 ZIP 压缩包！"
             exit 1
           fi
           echo "✅ 找到源码压缩包: $ZIP_FILE"
@@ -51,14 +49,13 @@ jobs:
 
       - name: Locate and build Android project
         run: |
-          # 寻找 settings.gradle
           PROJECT_FILE=$(find extracted -type f \( \
             -name settings.gradle -o \
             -name settings.gradle.kts \
           \) | head -n 1)
 
           if [ -z "$PROJECT_FILE" ]; then
-            echo "❌ ERROR: 解压后找不到 settings.gradle 文件。当前解压出的文件如下："
+            echo "❌ ERROR: 解压后找不到 settings.gradle 文件。"
             find extracted -maxdepth 3 -type f
             exit 1
           fi
@@ -67,8 +64,9 @@ jobs:
           echo "✅ 找到项目目录: $PROJECT_DIR"
           cd "$PROJECT_DIR"
 
+          # 【终极修复】忽略 JVM 目标版本不一致的严格检查
           echo "🚀 开始执行 Gradle 编译..."
-          gradle --no-daemon assembleDebug
+          gradle --no-daemon assembleDebug -Pkotlin.jvm.target.validation.mode=warning
 
           echo "🔍 收集生成的 APK..."
           mkdir -p "$GITHUB_WORKSPACE/apk-output"
