@@ -22,7 +22,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # 【关键修复】将原来的 v3 改为 v4，解决 SDK 安装失败的问题
       - name: Install Android SDK
         uses: android-actions/setup-android@v4
 
@@ -41,7 +40,7 @@ jobs:
         run: |
           ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: Project ZIP not found"
+            echo "ERROR: 根目录下没有找到 ZIP 压缩包"
             exit 1
           fi
           mkdir -p extracted
@@ -49,31 +48,40 @@ jobs:
 
       - name: Locate and build Android project
         run: |
+          # 1. 寻找 settings.gradle 确定项目根目录
           PROJECT_FILE=$(find extracted -type f \( \
             -name settings.gradle -o \
             -name settings.gradle.kts \
           \) | head -n 1)
 
           if [ -z "$PROJECT_FILE" ]; then
-            echo "ERROR: settings.gradle not found"
+            echo "❌ ERROR: 解压后找不到 settings.gradle 文件。当前文件结构如下："
             find extracted -maxdepth 4 -type f
             exit 1
           fi
 
+          # 2. 进入项目目录
           PROJECT_DIR=$(dirname "$PROJECT_FILE")
-          echo "Building project: $PROJECT_DIR"
-
+          echo "✅ 找到项目目录: $PROJECT_DIR"
           cd "$PROJECT_DIR"
-          gradle --no-daemon :app:assembleDebug
 
+          # 3. 打印模块信息供调试
+          echo "📦 当前包含的模块 (见 settings.gradle):"
+          cat settings.gradle || cat settings.gradle.kts
+
+          # 4. 开始构建（直接执行 assembleDebug，不写死模块名）
+          echo "🚀 开始执行 Gradle 编译..."
+          gradle --no-daemon assembleDebug
+
+          # 5. 全局搜索生成的 APK 并复制到输出目录
+          echo "🔍 查找生成的 APK..."
           mkdir -p "$GITHUB_WORKSPACE/apk-output"
-          find app/build/outputs/apk/debug -name "*.apk" \
-            -exec cp {} "$GITHUB_WORKSPACE/apk-output/" \;
+          find . -name "*.apk" -exec cp {} "$GITHUB_WORKSPACE/apk-output/" \;
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: CassetteStudio-Xperia1V-APK
+          name: CassetteStudio-APK
           path: apk-output/*.apk
           if-no-files-found: error
           retention-days: 14
