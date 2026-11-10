@@ -1,10 +1,9 @@
-
 name: Build CassetteStudio APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [ main ]
 
 permissions:
   contents: read
@@ -23,57 +22,20 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # 修正点：升级到 v4，并显式指定只安装 platform-tools，避开已被移除的 tools 包
       - name: Install Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
 
-      - name: Install SDK packages
-        run: |
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
-      - name: Install Gradle 8.9
-        run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip
-          unzip -q gradle-8.9-bin.zip -d /opt
-          echo "/opt/gradle-8.9/bin" >> "$GITHUB_PATH"
-
-      - name: Extract Android project
-        run: |
-          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: Project ZIP not found"
-            exit 1
-          fi
-          mkdir -p extracted
-          unzip -q "$ZIP_FILE" -d extracted
-
-      - name: Locate and build Android project
-        run: |
-          PROJECT_FILE=$(find extracted -type f \( \
-            -name settings.gradle -o \
-            -name settings.gradle.kts \
-          \) | head -n 1)
-
-          if [ -z "$PROJECT_FILE" ]; then
-            echo "ERROR: settings.gradle not found"
-            find extracted -maxdepth 4 -type f
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$PROJECT_FILE")
-          echo "Building project: $PROJECT_DIR"
-
-          cd "$PROJECT_DIR"
-          gradle --no-daemon :app:assembleDebug
-
-          mkdir -p "$GITHUB_WORKSPACE/apk-output"
-          find app/build/outputs/apk/debug -name "*.apk" \
-            -exec cp {} "$GITHUB_WORKSPACE/apk-output/" \;
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: CassetteStudio-Xperia1V-APK
-          path: apk-output/*.apk
-          if-no-files-found: error
-          retention-days: 14
+          name: CassetteStudio-APK
+          path: app/build/outputs/apk/debug/*.apk
